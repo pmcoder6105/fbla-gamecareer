@@ -125,7 +125,7 @@ public class GameManager : MonoBehaviour
         Time.timeScale = 1;
         startingTime = Time.time;
         endLevelScreen.SetActive(false);
-        Cursor.lockState = CursorLockMode.None;
+        Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
     }
 
