@@ -38,8 +38,8 @@ public class WASDCameraController : MonoBehaviour
             pos.x = -5;
         if (pos.x >= 5)
             pos.x = 5;
-        if (pos.z <= -12)
-            pos.z = -12;
+        if (pos.z <= -14)
+            pos.z = -14;
         if (pos.z >= -6)
             pos.z = -6;
 
