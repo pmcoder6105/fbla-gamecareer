@@ -13,77 +13,77 @@ using Random = UnityEngine.Random;
 
 public class GameManager : MonoBehaviour
 {
-
     /// <summary>
-    /// user story 4 --> Game Over Exit() --> Credit: Marc-André Larouche
-    /// user story 7 --> PlayerPrefs Code --> Credit: Marc-André Larouche
+    /// Revamped Point System:
+    /// - +25 points per fire extinguished
+    /// - +45 points per cat saved
+    /// - -1 point per second elapsed
+    /// - -1 point per 1% water lost
     /// </summary>
 
     // Levels manager
-    private int curLevel = 0; // This is for my current level, so i can "find myself"
+    private int curLevel = 0;
+    [SerializeField] private GameObject[] level;
+    private GameObject currentBoard;
 
-    [SerializeField] private GameObject[] level; // List of all levels
-    private GameObject currentBoard; // This is the current level, you have it saved and them you delet it
+    // Fire tracking
+    private int activeFire = 0;
+    private int firesExtinguished = 0; // NEW: Track fires put out
+    
+    // NEW: Point values
+    [SerializeField] private int pointsPerFireExtinguished = 25;
+    [SerializeField] private int pointsPerCatSaved = 45;
+    private int catsSaved = 0; // NEW: Track cats saved
 
-    // ActiveFire
-    private int activeFire = 0; // My quantity of fires will be 0 in the beginning
-
-    // For user story 2
-    [SerializeField] private int preventionScore;
+    // Timer
     [SerializeField] private Text fires;
-    [SerializeField] private Text txtTimer; // I need txt in the beginning otherwise it does not work
+    [SerializeField] private Text txtTimer;
     private float timePassed = 0;
-    private int firesNeverActive = 14;
-    private float startingTime = 0; // Start time
+    private float startingTime = 0;
+    
+    // Legacy variable for compatibility with Levels.cs (not used in new point system)
+    public int averageTime;
+    
+    // Score
     public float playerPoints = 0;
-    [SerializeField] private GameObject endLevelScreen; // I'm going to use for user story 3
+    [SerializeField] private GameObject endLevelScreen;
 
-    // User story 3
-    [SerializeField] private int pointsPerLevel = 200; // If i add levels i can increment it depending of the level
-    [SerializeField] private int scoreForTime = 50;
+    // Victory flag
     private bool victoryManager;
 
-    // User story 4 --> Damage
-    private float damage = 0;
-    private float penaltyPoints;
-    [SerializeField] private float damageSpeed = 0.5f;
-
-    //User story 4 --> Game Over screen
-    [SerializeField] private Button exitButton;
-
-    // User story 5
-    private int waterScore = 1000;
+    // Water system
     [HideInInspector] public float waterStart;
     public float waterAmount;
-    private float waterPoints;
     private float waterPercentage;
-    
-    // User story 7
-    private int bestScore = 0; //best score from the registry
 
-    // Public GameObject restartButton;
+    // Damage system (for game over condition)
+    private float damage = 0;
+    [SerializeField] private float damageSpeed = 0.5f;
+
+    // Best score tracking
+    private int bestScore = 0;
+
+    // UI Buttons
     [SerializeField] private Button restartButton;
+    [SerializeField] private Button exitButton;
     public string sceneToReload = "FireFighter";
 
-    // Variables for point system
-    private float totalPoints;
-    public int averageTime; // This is for my average time in each level
-    private float bonusPoints;
-    private float timePoints;
-    private float endingLevelPoints;
+    // Point breakdown for display
+    private float firePoints;
+    private float catPoints;
+    private float timePenalty;
+    private float waterPenalty;
+    private float levelTotalPoints;
 
-    // Txt
+    // UI Text elements
     [SerializeField] private Text txtVictory;
     [SerializeField] private Text txtTotalPoints;
-    [SerializeField] private Text txtPointsLevelPassed;
-    [SerializeField] private Text txtbonusPoints;
-    [SerializeField] private Text txttimePoints;
+    [SerializeField] private Text txtFirePoints;
+    [SerializeField] private Text txtCatPoints;
+    [SerializeField] private Text txtTimePenalty;
+    [SerializeField] private Text txtWaterPenalty;
     [SerializeField] private Text txtDamage;
-    [SerializeField] private Text txtPenaltyPoints;
-    [SerializeField] private Text txtExitButton;
-    [SerializeField] private Text txtRestartButton;
     [SerializeField] public Text txtWater;
-    [SerializeField] private Text txtPointsWater;
     [SerializeField] private Text txtBestScore;
     [SerializeField] private Text txtNextLevelButton;
     
@@ -92,13 +92,11 @@ public class GameManager : MonoBehaviour
     [SerializeField] private GameObject mainMenuButton;
     [SerializeField] private GameObject quitButton;
     
-    // Referencing my singleton
-    public static GameManager instance = null; 
-    
     // Singleton
+    public static GameManager instance = null;
+    
     private void Awake()
     {
-        // Singleton implementation
         if (instance == null)
         {
             instance = this;
@@ -112,14 +110,18 @@ public class GameManager : MonoBehaviour
     // Level loading
     public void LoadLevel()
     {
-        Invoke(nameof(Initiate), 0); //initialize level to make sure everything, see more about this
+        Invoke(nameof(Initiate), 0);
 
-        if (currentBoard) //if i have a level loaded it will destroy it 
+        if (currentBoard)
         {
             Destroy(currentBoard);
         }
 
-        activeFire = 0; // to be sure if the counter panel is empty
+        // Reset level-specific counters
+        activeFire = 0;
+        firesExtinguished = 0;
+        catsSaved = 0;
+        damage = 0;
 
         currentBoard = Instantiate(level[curLevel]);
         Time.timeScale = 1;
@@ -136,6 +138,7 @@ public class GameManager : MonoBehaviour
         waterPercentage = (waterAmount * 100) / waterStart;
         if (waterPercentage < 0)
         {
+            waterPercentage = 0;
             FinishingLevel(false);
         }
     }
@@ -166,86 +169,81 @@ public class GameManager : MonoBehaviour
     // Increase Fire Counter
     public void MoreFire()
     {
-        activeFire++; //it will add more fires
-        firesNeverActive--;
+        activeFire++;
     }
     
-    private void AddPoints() // Saving the player points
+    // NEW: Call this when a cat is saved
+    public void SaveCat()
     {
-        if (victoryManager)
+        catsSaved++;
+        Debug.Log("Cats Saved: " + catsSaved);
+    }
+    
+    // NEW: Simplified point calculation
+    private void CalculatePoints()
+    {
+        // Points earned from extinguishing fires
+        firePoints = firesExtinguished * pointsPerFireExtinguished;
+        
+        // Points earned from saving cats
+        catPoints = catsSaved * pointsPerCatSaved;
+        
+        // Time penalty (1 point per second)
+        timePenalty = Mathf.Floor(timePassed);
+        
+        // Water penalty (percentage of water lost)
+        float waterLostPercentage = 100f - waterPercentage;
+        waterPenalty = waterLostPercentage;
+        
+        // Calculate level total
+        levelTotalPoints = firePoints + catPoints - timePenalty - waterPenalty;
+        
+        // Ensure level points don't go below 0
+        if (levelTotalPoints < 0)
         {
-            endingLevelPoints = pointsPerLevel;
-            playerPoints += endingLevelPoints;
-            Debug.Log("Ending Level Points: " + endingLevelPoints);
+            levelTotalPoints = 0;
         }
-        else
-        {
-            endingLevelPoints = 0;
-            playerPoints += endingLevelPoints;
-        }
-
-        //adding all the points
-        playerPoints += pointsPerLevel;
-        Debug.Log("Points: " + pointsPerLevel); //i need this so i can see my points as a player
-
-        // time points
-        timePoints = ((averageTime / timePassed) * scoreForTime);
-        playerPoints += timePoints;
-        Debug.Log("Time Points: " + timePoints + "Time Passed: " + timePassed + "average time: " + averageTime + "score for time: " + scoreForTime);
-
-        //bonus points
-        bonusPoints = ((14 - firesNeverActive) * preventionScore); //teachers recommendation for the user story 2
-        playerPoints += bonusPoints;
-        Debug.Log("Bonus Points: " + bonusPoints);
-
-        //penalty points
-        // Add penalty points
-        penaltyPoints = (10 * damage);
-        playerPoints -= penaltyPoints;
-        Debug.Log("Penalty Points: " + penaltyPoints);
-
-        //water Points
-        waterPoints = ((int) waterPercentage * waterScore);
-        playerPoints += waterPoints; //(1000 pts/1%) . (waterLeft * scoreWater)
-        Debug.Log("Water Points: " + waterPoints);
-
-        //teacher's requirement, this is for my playerPoints never be less than 0
+        
+        // Add to overall player points
+        playerPoints += levelTotalPoints;
+        
+        // Ensure total player points don't go below 0
         if (playerPoints < 0)
         {
             playerPoints = 0;
         }
         
-        //PlayerPrefs
+        // Update best score if needed
         if (playerPoints > bestScore)
         {
-            PlayerPrefs.SetFloat("Score",playerPoints);
+            PlayerPrefs.SetFloat("Score", playerPoints);
             PlayerPrefs.Save();
         }
 
-
-        //just to see if it's ok
-        Debug.Log("Total of Points: " + playerPoints.ToString("000"));
-
+        // Debug output
+        Debug.Log("=== POINT BREAKDOWN ===");
+        Debug.Log("Fires Extinguished: " + firesExtinguished + " x " + pointsPerFireExtinguished + " = +" + firePoints);
+        Debug.Log("Cats Saved: " + catsSaved + " x " + pointsPerCatSaved + " = +" + catPoints);
+        Debug.Log("Time Penalty: -" + timePenalty + " seconds");
+        Debug.Log("Water Penalty: -" + waterPenalty + "% lost");
+        Debug.Log("Level Total: " + levelTotalPoints);
+        Debug.Log("Overall Total: " + playerPoints);
     }
 
     public List<GameObject> LightUpFiresRandomly(List<GameObject> notUsedFire, int i)
     {
-        //i'm lightning up a fire so i can remove it from my list
         notUsedFire[i].SetActive(true);
-
-        // i'm removing it from my list
         notUsedFire.Remove(notUsedFire[i]);
-        Debug.Log("lighting up a fire");
+        Debug.Log("Lighting up a fire");
         return notUsedFire;
     }
 
-    // Checking box
+    // Initialize level
     private void Initiate()
     {
-        GameObject[] checkbox = GameObject.FindGameObjectsWithTag("Checkbox"); //it will find my checkbox in unity
-        damage = 0; //if i don't do this i will play another game with trash points
+        GameObject[] checkbox = GameObject.FindGameObjectsWithTag("Checkbox");
+        damage = 0;
 
-        //it sets all the check boxes as disabled  
         foreach (var check in checkbox)
         {
             check.SetActive(false);
@@ -258,20 +256,31 @@ public class GameManager : MonoBehaviour
     private void Victorytxt()
     {
         txtVictory.text = "Congratulations, You Just Won The Level!!!";
-        txtPointsLevelPassed.text = "Level Points: + " + endingLevelPoints;
-        txttimePoints.text = "Time Points: " + timePoints;
-        txtbonusPoints.text = "Bonus Points: " + bonusPoints;
-        txtTotalPoints.text = "Final Score: " + playerPoints;
-        txtPenaltyPoints.text = "Penalty Points: - " + penaltyPoints;
-        txtPointsWater.text = "Water Points: " + waterPoints;
-        txtExitButton.text = "Quit";
-        txtNextLevelButton.text = "Next Level";
+        
+        if (txtFirePoints != null)
+            txtFirePoints.text = "Fire Points: +" + firePoints + " (" + firesExtinguished + " fires x " + pointsPerFireExtinguished + ")";
+        
+        if (txtCatPoints != null)
+            txtCatPoints.text = "Cat Points: +" + catPoints + " (" + catsSaved + " cats x " + pointsPerCatSaved + ")";
+        
+        if (txtTimePenalty != null)
+            txtTimePenalty.text = "Time Penalty: -" + timePenalty + " seconds";
+        
+        if (txtWaterPenalty != null)
+            txtWaterPenalty.text = "Water Penalty: -" + waterPenalty + "% lost";
+        
+        txtTotalPoints.text = "Level Score: " + levelTotalPoints + "\nTotal Score: " + playerPoints;
+        
+        if (txtNextLevelButton != null)
+            txtNextLevelButton.text = "Next Level";
+        
         nextLevelButton.SetActive(true);
         mainMenuButton.SetActive(false);
         quitButton.SetActive(true);
+        
         if (playerPoints > bestScore)
         {
-            txtBestScore.text = "[HiGH SCORE] ";
+            txtBestScore.text = "[HIGH SCORE!]";
         }
         else
         {
@@ -280,34 +289,41 @@ public class GameManager : MonoBehaviour
     }
     
     // Show Defeat Screen
-    private void Defeattxt()//it will show my defeat menu and i will use this to load in the script for scene exit menu
+    private void Defeattxt()
     {
         txtVictory.text = "Defeated! Try again!";
-        txtPointsLevelPassed.text = "Level Points: + " + endingLevelPoints;
-        txttimePoints.text = "Time Points: " + timePoints;
-        txtbonusPoints.text = "Bonus Points: " + bonusPoints;
-        txtTotalPoints.text = "Final Score: " + playerPoints;
-        txtPenaltyPoints.text = "Penalty Points: - " + penaltyPoints;
-        txtPointsWater.text = "Water Points: " + waterPoints;
+        
+        if (txtFirePoints != null)
+            txtFirePoints.text = "Fire Points: +" + firePoints + " (" + firesExtinguished + " fires x " + pointsPerFireExtinguished + ")";
+        
+        if (txtCatPoints != null)
+            txtCatPoints.text = "Cat Points: +" + catPoints + " (" + catsSaved + " cats x " + pointsPerCatSaved + ")";
+        
+        if (txtTimePenalty != null)
+            txtTimePenalty.text = "Time Penalty: -" + timePenalty + " seconds";
+        
+        if (txtWaterPenalty != null)
+            txtWaterPenalty.text = "Water Penalty: -" + waterPenalty + "% lost";
+        
+        txtTotalPoints.text = "Level Score: " + levelTotalPoints + "\nTotal Score: " + playerPoints;
+        
         nextLevelButton.SetActive(false);
         quitButton.SetActive(false);
         mainMenuButton.SetActive(true);
-        if (playerPoints < bestScore)
-        {
-            txtBestScore.text = "";
-        }
+        
+        txtBestScore.text = "";
     }
     
     // Ends the level
     private void FinishingLevel(bool victory)
     {
         victoryManager = victory;
-        AddPoints();
+        CalculatePoints();
         endLevelScreen.SetActive(true);
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
-        //pausing
         Time.timeScale = 0;
+        
         if (victory)
         {
             curLevel++;
@@ -319,49 +335,37 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    // Decrease Fire Counter
+    // Decrease Fire Counter (called when fire is extinguished)
     public void KillFire()
     {
         activeFire--;
-        Debug.Log("Active Fires: " + activeFire);
-        if (activeFire <= 0) //if i don't have any fire// it cannot be in the update otherwise this is going to happen forever
+        firesExtinguished++; // NEW: Track fires extinguished
+        Debug.Log("Active Fires: " + activeFire + " | Fires Extinguished: " + firesExtinguished);
+        
+        if (activeFire <= 0)
         {
             FinishingLevel(true);
         }
     }
 
-    // Start is called before the first frame update
     void Start()
     {
-        bestScore = PlayerPrefs.GetInt ("Score", 0);//read the save data from the registry
-        LoadLevel(); //i need to change this to load main menu than if i press the button play i can call loadlevel
+        bestScore = PlayerPrefs.GetInt("Score", 0);
+        LoadLevel();
     }
     
     void Update()
     {
         fires.text = activeFire.ToString();
 
-        //all values debug.log
-        /* Debug.Log("Damage: " + damage);
-         Debug.Log("Total of Points: " + playerPoints.ToString("000"));
-         Debug.Log("Penalty Points: " + penaltyPoints);
-         Debug.Log("Time Points: " + timePoints + "Time Passed: " + timePassed + "average time: " + averageTime+ "score for time: "+ scoreForTime);
-         Debug.Log("Bonus Points: " + bonusPoints);
-         Debug.Log("Ending Level Points: " + endingLevelPoints);*/
-
         timePassed = Time.time - startingTime;
-        //Debug.Log("Time Passed: "+timePassed);
 
-        string minutes;
-        minutes = ((int) timePassed / 60).ToString();
-
-        string seconds;
-        seconds = (timePassed % 60).ToString("00");
-
+        string minutes = ((int)timePassed / 60).ToString();
+        string seconds = (timePassed % 60).ToString("00");
         txtTimer.text = minutes + ":" + seconds;
         
-        //damage update
-        if (damage <= 100)//if is bigger than 100 the damage will be 100 otherwise it will finilize the level forever, loop
+        // Damage update
+        if (damage <= 100)
         {
             damage += (damageSpeed * activeFire) * Time.deltaTime;
         }
@@ -369,18 +373,18 @@ public class GameManager : MonoBehaviour
         {
             damage = 100;
         }
-        txtDamage.text = damage.ToString("00") + "%";
-
         
-        //water
-        txtWater.text = waterPercentage.ToString("00") + "%";
+        if (txtDamage != null)
+            txtDamage.text = damage.ToString("00") + "%";
         
-        if (damage > 100)
-        { 
+        // Water display
+        if (txtWater != null)
+            txtWater.text = waterPercentage.ToString("00") + "%";
+        
+        // Game over condition
+        if (damage >= 100)
+        {
             FinishingLevel(false);
-            //enabled = false;
         }
     }
 }
-
-

@@ -37,8 +37,11 @@ public class CatRescue : MonoBehaviour
     private Transform currentSpawnPoint;
     private Coroutine spawnCoroutine;
 
+    GameManager manager;
+
     void Start()
     {
+        manager = GetComponent<GameManager>();
         // Hide cat and UI at start
         if (catModel != null)
         {
