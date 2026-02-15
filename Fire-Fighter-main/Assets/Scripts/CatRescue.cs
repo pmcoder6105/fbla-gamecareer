@@ -217,7 +217,8 @@ public class CatRescue : MonoBehaviour
         // Award points through GameManager
         if (GameManager.instance != null)
         {
-            GameManager.instance.playerPoints += rescuePoints;
+            //GameManager.instance.playerPoints += rescuePoints;
+            GameManager.instance.SaveCat();
             Debug.Log("Cat rescued! Awarded " + rescuePoints + " points. Total: " + GameManager.instance.playerPoints);
         }
         
