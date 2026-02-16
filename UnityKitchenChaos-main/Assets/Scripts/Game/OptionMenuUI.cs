@@ -23,10 +23,6 @@ public class OptionMenuUI : MonoBehaviour
 
     private void Awake()
     {
-        if (Instance != null)
-        {
-            Debug.LogError("Cannot have multiple OptionUI");
-        }
         Instance = this;
 
         sfxVolumeText = sfxVolumnButton.GetComponentInChildren<TextMeshProUGUI>();

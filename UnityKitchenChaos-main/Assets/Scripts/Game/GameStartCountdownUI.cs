@@ -35,11 +35,11 @@ public class GameStartCountdownUI : MonoBehaviour
             int countdown = GameManager.Instance.GameStartCountdownFloored;
             if (countdown == 0)
             {
-                SyncCountdownText("Go!");
+                SyncCountdownText("");
             }
             else
             {
-                SyncCountdownText(countdown.ToString());
+                SyncCountdownText("");
             }
             yield return null;
         }
