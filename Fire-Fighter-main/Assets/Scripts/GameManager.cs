@@ -255,7 +255,7 @@ public class GameManager : MonoBehaviour
     // Show Victory Screen
     private void Victorytxt()
     {
-        txtVictory.text = "Congratulations, You Just Won The Level!!!";
+        txtVictory.text = "";
         
         if (txtFirePoints != null)
             txtFirePoints.text = "Fire Points: +" + firePoints + " (" + firesExtinguished + " fires x " + pointsPerFireExtinguished + ")";
